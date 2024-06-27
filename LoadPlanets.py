@@ -1,109 +1,132 @@
-import pygame
-import sys
-import time
+# LoadPlanets.py
+import pygame as pg
 from OpenGL.GL import *
-from OpenGL.GLU import *
-import pyassimp
+from OpenGL.GL.shaders import compileProgram,compileShader
+import numpy as np
+import pyrr
+import pygame as pg
+from OpenGL.GL import *
+from Load_OBJ import create_shader, Mesh
+
+class App:
+    """
+    For now, the app will be handling everything.
+    Later on we'll break it into subcomponents.
+    """
+    def __init__(self):
+
+        self.camera_position = np.array([0.0, 0.0, 2.0], dtype=np.float32)  # Inicializa la posición 
+        self._set_up_pygame()
+        self._set_up_timer()
+        self._set_up_opengl()
+        self._create_assets()
+        self._set_onetime_uniforms()
+        self._get_uniform_locations()
+
+    def _set_up_pygame(self) -> None:
+        """
+        Initialize and configure pygame.
+        """
+        pg.init()
+        pg.display.gl_set_attribute(pg.GL_CONTEXT_MAJOR_VERSION, 3)
+        pg.display.gl_set_attribute(pg.GL_CONTEXT_MINOR_VERSION, 3)
+        pg.display.gl_set_attribute(pg.GL_CONTEXT_PROFILE_MASK,
+                                    pg.GL_CONTEXT_PROFILE_CORE)
+        pg.display.set_mode((640, 480), pg.OPENGL | pg.DOUBLEBUF)
+
+    def _set_up_timer(self) -> None:
+        """
+        Set up the app's timer.
+        """
+        self.clock = pg.time.Clock()
+
+    def _set_up_opengl(self) -> None:
+        """
+        Configure any desired OpenGL options
+        """
+        glClearColor(0.1, 0.2, 0.2, 1)
+        glEnable(GL_DEPTH_TEST)
+
+    def _create_assets(self) -> None:
+        """
+        Create all of the assets needed for drawing.
+        """
+        self.planet_mesh = Mesh("Planets_INFO/Planets_OBJ/earth.obj")
+        self.planet_mesh.bind_texture("Planets_INFO/Planets_Texture/terraPRO.png")  # Load texture here
+        self.shader = create_shader(
+            vertex_filepath="Planets_INFO/Planets_Shaders/Vertex.txt",
+            fragment_filepath="Planets_INFO/Planets_Shaders/Fragment.txt")
+
+    def _set_onetime_uniforms(self) -> None:
+        """
+        Some shader data only needs to be set once.
+        """
+        glUseProgram(self.shader)
+        glUniform1i(glGetUniformLocation(self.shader, "imageTexture"), 0)
+
+        projection_transform = pyrr.matrix44.create_perspective_projection(
+            fovy=45, aspect=640 / 480,
+            near=0.1, far=10, dtype=np.float32
+        )
+        glUniformMatrix4fv(
+            glGetUniformLocation(self.shader, "projection"),
+            1, GL_FALSE, projection_transform
+        )
+
+    def _get_uniform_locations(self) -> None:
+        """
+        Query and store the locations of shader uniforms
+        """
+        glUseProgram(self.shader)
+        self.modelMatrixLocation = glGetUniformLocation(self.shader, "model")
+
+    def run(self) -> None:
+            """ Run the app """
+
+            keys = pg.key.get_pressed()
+
+            running = True
+            while running:
+                for event in pg.event.get():
+                    if event.type == pg.QUIT:
+                        running = False
+                    elif keys[pg.KEYDOWN]:
+
+                        # Si la tecla "S" está presionada, aleja la cámara
+                        self.camera_position[2] -= 0.1  # Puedes ajustar el valor según tus necesidades
+
+                self._update()
+
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+                glUseProgram(self.shader)
+
+                glUniformMatrix4fv(
+                    self.modelMatrixLocation, 1, GL_FALSE,
+                    self._get_model_transform()
+                )
+
+                self.planet_mesh.arm_for_drawing()
+                self.planet_mesh.draw()
+
+                pg.display.flip()
+                self.clock.tick(60)
 
 
-def setup_lighting_and_camera():
-    glEnable(GL_LIGHTING)
-    glEnable(GL_LIGHT0)
-    glLightfv(GL_LIGHT0, GL_POSITION, [0, 1, 2, 1])
-    glLightfv(GL_LIGHT0, GL_DIFFUSE, [1, 1, 1, 1])
-    
-    # Configuración de la cámara
-    glMatrixMode(GL_PROJECTION)
-    glLoadIdentity()
-    gluPerspective(45, (width/height), 0.1, 50.0)
-    glMatrixMode(GL_MODELVIEW)
-    glLoadIdentity()
-    gluLookAt(0, 0, 5, 0, 0, 0, 0, 1, 0)
+    def quit(self) -> None:
+        """ Cleanup the app, run exit code """
+        self.planet_mesh.destroy()
+        glDeleteProgram(self.shader)
+        pg.quit()
 
-def load_model(file_path):
-    with pyassimp.load(file_path) as scene:
-        if not scene.meshes:
-            raise Exception("No meshes found in model file.")
-        return scene
+    def _update(self) -> None:
+        """ Update the app state """
+        pass  # Placeholder for now
 
-def draw_model(scene):
-    for mesh in scene.meshes:
-        glBegin(GL_TRIANGLES)
-        for face in mesh.faces:
-            for index in face:  # Cambiado de face.indices a face
-                glVertex3fv(mesh.vertices[index])
-        glEnd()
-
-def render_model(scene):
-
-    global rotation_x 
-    global rotation_y 
-
-    glEnable(GL_DEPTH_TEST)
-    glDepthFunc(GL_LESS)
-    glShadeModel(GL_SMOOTH)
-
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-    
-    # Set up the modelview matrix
-    glMatrixMode(GL_MODELVIEW)
-    glLoadIdentity()
-    glTranslatef(0.0, 0.0, -5.0)
-
-    glRotatef(rotation_x, 1, 0, 0)
-    glRotatef(rotation_y, 0, 1, 0)
-    
-    
-    # Draw the model
-    draw_model(scene)
-    
-    pygame.display.flip()
+    def _get_model_transform(self) -> np.ndarray:
+        """ Returns the model transformation matrix """
+        return pyrr.matrix44.create_identity(dtype=np.float32)
 
 if __name__ == "__main__":
-    pygame.init()
-
-    title = "Solar System Travel"
-
-    target_fps = 60
-    (width, height) = (800, 600)
-    flags = pygame.DOUBLEBUF | pygame.OPENGL
-    screen = pygame.display.set_mode((width, height), flags)
-    prev_time = time.time()
-
-    rotation_x = 0
-    rotation_y = 0
-
-    model_path = "./Planets_INFO/Planets_OBJ/saturno.obj"  # Actualiza esta ruta a tu archivo de modelo
-    scene = None
-    with pyassimp.load(model_path) as loaded_scene:
-        
-        scene = loaded_scene
-
-    setup_lighting_and_camera()
-
-    while True:
-
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_a:
-                    rotation_y -= 60
-                elif event.key == pygame.K_d:
-                    rotation_y += 60
-                elif event.key == pygame.K_w:
-                    rotation_x -= 60
-                elif event.key == pygame.K_s:
-                    rotation_x += 60
-
-        render_model(scene)
-        
-        curr_time = time.time()
-        diff = curr_time - prev_time
-        delay = max(1.0 / target_fps - diff, 0)
-        time.sleep(delay)
-        fps = 1.0 / (delay + diff)
-        prev_time = curr_time
-        pygame.display.set_caption("{0}, FPS: {1:.0f}".format(title, fps))
-
+    my_app = App()
+    my_app.run()
+    my_app.quit()
