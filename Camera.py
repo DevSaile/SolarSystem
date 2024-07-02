@@ -1,81 +1,62 @@
-from pyrr import Vector3, Matrix44, vector, vector3
-from math import sin, cos, radians
-
+from OpenGL.GL import *
+from pyrr import Matrix44, Vector3, Quaternion
+import numpy as np
 
 class Camera:
-    def __init__(self):
-        self.camera_pos = Vector3([0.0, 0.0, 1000.0])
-        self.camera_front = Vector3([0.0, 0.0, -1.0])
-        self.camera_up = Vector3([0.0, 1.0, 0.0])
-        self.camera_right = Vector3([1.0, 0.0, 0.0])
+    def __init__(self, position=Vector3([0.0, 0.0, 3.0]), up=Vector3([0.0, 1.0, 0.0]), yaw=-90.0, pitch=0.0):
+        self.position = position
+        self.front = Vector3([0.0, 0.0, -1.0])
+        self.up = up
+        self.right = Vector3([1.0, 0.0, 0.0])
+        self.world_up = up
+        self.yaw = yaw
+        self.pitch = pitch
+        self.zoom = 45.0
 
-        self.mouse_sensitivity = 0.25
-        self.yaw = -90.0
-        self.pitch = 0.0
+        self.update_camera_vectors()
 
     def get_view_matrix(self):
-        
-        return self.look_at(self.camera_pos, self.camera_pos + self.camera_front, self.camera_up)
+        return Matrix44.look_at(self.position, self.position + self.front, self.up)
 
     def process_keyboard(self, direction, velocity):
         if direction == "FORWARD":
-            self.camera_pos += self.camera_front * velocity
+            self.position += self.front * velocity
         if direction == "BACKWARD":
-            self.camera_pos -= self.camera_front * velocity
+            self.position -= self.front * velocity
         if direction == "LEFT":
-            self.camera_pos -= self.camera_right * velocity
+            self.position -= self.right * velocity
         if direction == "RIGHT":
-            self.camera_pos += self.camera_right * velocity
+            self.position += self.right * velocity
 
     def process_mouse_movement(self, xoffset, yoffset, constrain_pitch=True):
-        xoffset *= self.mouse_sensitivity
-        yoffset *= self.mouse_sensitivity
+        sensitivity = 0.1
+        xoffset *= sensitivity
+        yoffset *= sensitivity
 
         self.yaw += xoffset
         self.pitch += yoffset
 
         if constrain_pitch:
-            if self.pitch > 45.0:
-                self.pitch = 45.0
-            if self.pitch < -45.0:
-                self.pitch = -45.0
+            if self.pitch > 89.0:
+                self.pitch = 89.0
+            if self.pitch < -89.0:
+                self.pitch = -89.0
 
         self.update_camera_vectors()
 
+    def process_mouse_scroll(self, yoffset):
+        if self.zoom >= 1.0 and self.zoom <= 45.0:
+            self.zoom -= yoffset
+        if self.zoom <= 1.0:
+            self.zoom = 1.0
+        if self.zoom >= 45.0:
+            self.zoom = 45.0
+
     def update_camera_vectors(self):
         front = Vector3([0.0, 0.0, 0.0])
-        front.x = cos(radians(self.yaw)) * cos(radians(self.pitch))
-        front.y = sin(radians(self.pitch))
-        front.z = sin(radians(self.yaw)) * cos(radians(self.pitch))
-
-        self.camera_front = vector.normalise(front)
-        self.camera_right = vector.normalise(vector3.cross(self.camera_front, Vector3([0.0, 1.0, 0.0])))
-        self.camera_up = vector.normalise(vector3.cross(self.camera_right, self.camera_front))
-
-    def look_at(self, position, target, world_up):
-        # 1.Position = known
-        # 2.Calculate cameraDirection
-        zaxis = vector.normalise(position - target)
-        # 3.Get positive right axis vector
-        xaxis = vector.normalise(vector3.cross(vector.normalise(world_up), zaxis))
-        # 4.Calculate the camera up vector
-        yaxis = vector3.cross(zaxis, xaxis)
-
-        # create translation and rotation matrix
-        translation = Matrix44.identity()
-        translation[3][0] = -position.x
-        translation[3][1] = -position.y
-        translation[3][2] = -position.z
-
-        rotation = Matrix44.identity()
-        rotation[0][0] = xaxis[0]
-        rotation[1][0] = xaxis[1]
-        rotation[2][0] = xaxis[2]
-        rotation[0][1] = yaxis[0]
-        rotation[1][1] = yaxis[1]
-        rotation[2][1] = yaxis[2]
-        rotation[0][2] = zaxis[0]
-        rotation[1][2] = zaxis[1]
-        rotation[2][2] = zaxis[2]
-
-        return translation * rotation
+        front.x = np.cos(np.radians(self.yaw)) * np.cos(np.radians(self.pitch))
+        front.y = np.sin(np.radians(self.pitch))
+        front.z = np.sin(np.radians(self.yaw)) * np.cos(np.radians(self.pitch))
+        self.front = front.normalized
+        self.right = self.front.cross(self.world_up).normalized
+        self.up = self.right.cross(self.front).normalized

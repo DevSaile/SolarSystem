@@ -13,7 +13,7 @@ import random
 import math
 import pygame
 
-# Inicializa pygame
+# Inicializa pygame 
 pygame.init()
 sound = pygame.mixer.Sound('sonido.mp3')
 
@@ -32,34 +32,37 @@ def key_callback(window, key, scancode, action, mode):
         elif action == glfw.RELEASE:
             keys[key] = False
 
-def do_movement():
+def do_movement(window):
 
     
-    if keys[glfw.KEY_W]:
-        cam.process_keyboard("FORWARD", 1)
-    if keys[glfw.KEY_S]:
-        cam.process_keyboard("BACKWARD", 1)
-    if keys[glfw.KEY_A]:
-        cam.process_keyboard("LEFT", 1)
-    if keys[glfw.KEY_D]:
-        cam.process_keyboard("RIGHT", 1)
+    if glfw.get_key(window, glfw.KEY_W) == glfw.PRESS:
+        cam.process_keyboard("FORWARD", 4.05)
+    if glfw.get_key(window, glfw.KEY_A) == glfw.PRESS:
+        cam.process_keyboard("LEFT", 4.05)
+    if glfw.get_key(window, glfw.KEY_D) == glfw.PRESS:
+        cam.process_keyboard("RIGHT", 4.05)
+    if glfw.get_key(window, glfw.KEY_S) == glfw.PRESS:
+        cam.process_keyboard("BACKWARD", 4.05)
     
 
+# Callbacks for mouse input
 def mouse_callback(window, xpos, ypos):
-    global first_mouse, lastX, lastY
-
+    global last_x, last_y, first_mouse
     if first_mouse:
-        lastX = xpos
-        lastY = ypos
+        last_x = xpos
+        last_y = ypos
         first_mouse = False
 
-    xoffset = xpos - lastX
-    yoffset = lastY - ypos
-
-    lastX = xpos
-    lastY = ypos
+    xoffset = xpos - last_x
+    yoffset = last_y - ypos  # reversed since y-coordinates go from bottom to top
+    last_x = xpos
+    last_y = ypos
 
     cam.process_mouse_movement(xoffset, yoffset)
+
+def scroll_callback(window, xoffset, yoffset):
+
+    cam.process_mouse_scroll(yoffset)
 
 def window_resize(window, width, height):
     glViewport(0, 0, width, height)
@@ -79,9 +82,11 @@ def main():
 
     glfw.make_context_current(window)
     glfw.set_window_size_callback(window, window_resize)
-    glfw.set_key_callback(window, key_callback)
+    # Set callbacks for mouse input
     glfw.set_cursor_pos_callback(window, mouse_callback)
-
+    glfw.set_scroll_callback(window, scroll_callback)
+    
+    glfw.set_input_mode(window, glfw.CURSOR, glfw.CURSOR_DISABLED)
 
 
     obj = ObjLoader()
@@ -164,7 +169,7 @@ def main():
     while not glfw.window_should_close(window):
 
         glfw.poll_events()
-        do_movement()
+        do_movement(window)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         time = glfw.get_time()
 
